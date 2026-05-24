@@ -1,0 +1,186 @@
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<h2 class="sr-only">Memory Map — pinned photos and memories across 11 friend campuses</h2>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+.app{display:flex;flex-direction:column;height:600px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);overflow:hidden;}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary);gap:10px;flex-wrap:wrap;}
+.logo{font-size:15px;font-weight:500;color:var(--color-text-primary);display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.logo i{font-size:18px;color:#378ADD;}
+.tabs-wrap{display:flex;gap:4px;flex-wrap:wrap;flex:1;justify-content:center;}
+.tab{font-size:12px;padding:4px 10px;border-radius:999px;border:0.5px solid var(--color-border-tertiary);background:transparent;color:var(--color-text-secondary);cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.tab.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-secondary);font-weight:500;}
+.tab:hover:not(.active){background:var(--color-background-secondary);}
+.add-btn{font-size:13px;padding:5px 12px;border-radius:999px;border:0.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-primary);cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;}
+.add-btn:hover{background:var(--color-background-secondary);}
+.body{display:flex;flex:1;overflow:hidden;}
+#map{flex:1;height:100%;z-index:1;}
+.sidebar{width:230px;min-width:230px;border-left:0.5px solid var(--color-border-tertiary);overflow-y:auto;display:flex;flex-direction:column;background:var(--color-background-primary);}
+.sidebar-header{padding:12px 14px 8px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.sidebar-title{font-size:13px;font-weight:500;color:var(--color-text-primary);}
+.sidebar-sub{font-size:12px;color:var(--color-text-secondary);margin-top:2px;}
+.mem-card{padding:10px 14px;border-bottom:0.5px solid var(--color-border-tertiary);cursor:pointer;transition:background 0.1s;}
+.mem-card:hover{background:var(--color-background-secondary);}
+.mem-card.active{background:#E6F1FB;}
+.mem-emoji{width:100%;height:64px;border-radius:var(--border-radius-md);display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:7px;}
+.mem-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+.mem-place{font-size:13px;font-weight:500;color:var(--color-text-primary);}
+.mem-badge{font-size:10px;padding:2px 6px;border-radius:999px;}
+.mem-who{font-size:12px;color:var(--color-text-secondary);}
+.mem-date{font-size:11px;color:var(--color-text-tertiary);margin-top:2px;}
+</style>
+
+<div class="app">
+  <div class="topbar">
+    <div class="logo"><i class="ti ti-map-pin" aria-hidden="true"></i> Pinned</div>
+    <div class="tabs-wrap" id="tabs"></div>
+    <button class="add-btn"><i class="ti ti-plus" aria-hidden="true"></i> Add memory</button>
+  </div>
+  <div class="body">
+    <div id="map"></div>
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title" id="s-title">All memories</div>
+        <div class="sidebar-sub" id="s-sub"></div>
+      </div>
+      <div id="mem-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CAMPUSES = [
+  {name:'Haverford',    lat:39.9879, lng:-75.3054, color:'#534AB7', bg:'#EEEDFE', tc:'#3C3489'},
+  {name:'William & Mary', lat:37.2707, lng:-76.7075, color:'#1D9E75', bg:'#E1F5EE', tc:'#0F6E56'},
+  {name:'Duke',         lat:36.0014, lng:-78.9382, color:'#185FA5', bg:'#E6F1FB', tc:'#0C447C'},
+  {name:'Maryland',     lat:38.9869, lng:-76.9426, color:'#A32D2D', bg:'#FCEBEB', tc:'#791F1F'},
+  {name:'American',     lat:38.9376, lng:-77.0872, color:'#854F0B', bg:'#FAEEDA', tc:'#633806'},
+  {name:'Vermont',      lat:44.4759, lng:-73.1965, color:'#3B6D11', bg:'#EAF3DE', tc:'#27500A'},
+  {name:'Mt Holyoke',   lat:42.2548, lng:-72.5739, color:'#993556', bg:'#FBEAF0', tc:'#72243E'},
+  {name:'Florida Tech', lat:28.0617, lng:-80.6243, color:'#993C1D', bg:'#FAECE7', tc:'#712B13'},
+  {name:'Cal Poly SLO', lat:35.2999, lng:-120.6625, color:'#0F6E56', bg:'#E1F5EE', tc:'#085041'},
+  {name:'Richmond',     lat:37.5745, lng:-77.5408, color:'#7F77DD', bg:'#EEEDFE', tc:'#534AB7'},
+  {name:'Ohio State',   lat:40.0076, lng:-83.0300, color:'#888780', bg:'#F1EFE8', tc:'#5F5E5A'},
+];
+
+const MEMORIES = [
+  {id:0,campus:'Haverford',place:'Duck Pond',who:'Alex',date:'Sep 8',caption:'Morning walk before 9am class',emoji:'🦆'},
+  {id:1,campus:'Haverford',place:'Founders Hall',who:'Alex + Sam',date:'Oct 12',caption:'Midterm study session',emoji:'📚'},
+  {id:2,campus:'William & Mary',place:'Wren Building',who:'Jordan',date:'Sep 15',caption:'Oldest academic building in the US!',emoji:'🏛️'},
+  {id:3,campus:'William & Mary',place:'Colonial Williamsburg',who:'Jordan + friends',date:'Oct 5',caption:'Fall weekend exploring',emoji:'🍂'},
+  {id:4,campus:'Duke',place:'Duke Chapel',who:'Morgan',date:'Sep 20',caption:'So beautiful in the afternoon light',emoji:'⛪'},
+  {id:5,campus:'Duke',place:'Cameron Indoor',who:'Morgan',date:'Nov 3',caption:'Game day energy is unreal',emoji:'🏀'},
+  {id:6,campus:'Maryland',place:'McKeldin Mall',who:'Riley',date:'Sep 10',caption:'First week vibes',emoji:'🌳'},
+  {id:7,campus:'American',place:'Kay Spiritual Life',who:'Casey',date:'Oct 18',caption:'Quiet spot between classes',emoji:'✨'},
+  {id:8,campus:'Vermont',place:'Church Street',who:'Drew',date:'Oct 22',caption:'Peak foliage is absolutely insane up here',emoji:'🍁'},
+  {id:9,campus:'Mt Holyoke',place:'Lower Lake',who:'Quinn',date:'Sep 28',caption:'Kayaking on a Thursday — worth it',emoji:'🚣'},
+  {id:10,campus:'Florida Tech',place:'Botanical Garden',who:'Avery',date:'Nov 8',caption:'Butterflies everywhere today',emoji:'🦋'},
+  {id:11,campus:'Cal Poly SLO',place:'Poly Canyon',who:'Parker',date:'Oct 1',caption:'Hiked out to the architecture village',emoji:'🏔️'},
+  {id:12,campus:'Richmond',place:'Westhampton Lake',who:'Sage',date:'Sep 25',caption:'Evening run around the lake',emoji:'🌅'},
+  {id:13,campus:'Ohio State',place:'Oval',who:'Taylor',date:'Sep 5',caption:'First day — campus is massive',emoji:'🐝'},
+];
+
+function campusFor(name){ return CAMPUSES.find(c=>c.name===name); }
+
+let activeView='all';
+let activeId=null;
+let markers={};
+let map;
+
+function initMap(){
+  map = L.map('map',{zoomControl:true}).setView([39.5,-90],4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap',maxZoom:18
+  }).addTo(map);
+
+  MEMORIES.forEach(m=>{
+    const c=campusFor(m.campus);
+    if(!c)return;
+    const jlat=c.lat+(Math.random()-0.5)*0.008;
+    const jlng=c.lng+(Math.random()-0.5)*0.008;
+    const marker=L.circleMarker([jlat,jlng],{
+      radius:8,fillColor:c.color,color:'white',weight:2,fillOpacity:1,
+    }).addTo(map);
+    marker.on('click',()=>selectMemory(m.id));
+    marker.bindTooltip(m.place+' · '+m.campus,{direction:'top',offset:[0,-8]});
+    markers[m.id]=marker;
+  });
+}
+
+function buildTabs(){
+  const wrap=document.getElementById('tabs');
+  const all=document.createElement('button');
+  all.className='tab active';all.textContent='All';
+  all.onclick=()=>setView('all');
+  wrap.appendChild(all);
+  CAMPUSES.forEach(c=>{
+    const btn=document.createElement('button');
+    btn.className='tab';btn.textContent=c.name;
+    btn.onclick=()=>setView(c.name);
+    wrap.appendChild(btn);
+  });
+}
+
+function setView(campus){
+  activeView=campus;
+  activeId=null;
+  document.querySelectorAll('.tab').forEach(t=>{
+    const label=t.textContent;
+    t.classList.toggle('active',(campus==='all'&&label==='All')||(label===campus));
+  });
+  const filtered=campus==='all'?MEMORIES:MEMORIES.filter(m=>m.campus===campus);
+  document.getElementById('s-title').textContent=campus==='all'?'All memories':campus;
+  document.getElementById('s-sub').textContent=filtered.length+' memor'+(filtered.length===1?'y':'ies')+
+    (campus==='all'?' across '+CAMPUSES.length+' campuses':'');
+  Object.entries(markers).forEach(([id,mk])=>{
+    const mem=MEMORIES.find(m=>m.id===+id);
+    if(!mem)return;
+    const show=campus==='all'||mem.campus===campus;
+    mk.setStyle({opacity:show?1:0.15,fillOpacity:show?1:0.1});
+  });
+  if(campus!=='all'){
+    const c=campusFor(campus);
+    if(c)map.flyTo([c.lat,c.lng],14,{duration:1});
+  } else {
+    map.flyTo([39.5,-90],4,{duration:1});
+  }
+  renderList(filtered);
+}
+
+function renderList(list){
+  const el=document.getElementById('mem-list');
+  el.innerHTML=list.map(m=>{
+    const c=campusFor(m.campus)||{bg:'#eee',tc:'#333',color:'#333'};
+    return `<div class="mem-card${activeId===m.id?' active':''}" id="card${m.id}" onclick="selectMemory(${m.id})">
+      <div class="mem-emoji" style="background:${c.bg}">${m.emoji}</div>
+      <div class="mem-row">
+        <span class="mem-place">${m.place}</span>
+        <span class="mem-badge" style="background:${c.bg};color:${c.tc}">${m.campus}</span>
+      </div>
+      <div class="mem-who">${m.who}</div>
+      <div class="mem-date">${m.date} · ${m.caption}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectMemory(id){
+  activeId=id;
+  document.querySelectorAll('.mem-card').forEach(c=>c.classList.remove('active'));
+  const card=document.getElementById('card'+id);
+  if(card){card.classList.add('active');card.scrollIntoView({behavior:'smooth',block:'nearest'});}
+  Object.entries(markers).forEach(([mid,mk])=>{
+    mk.setStyle({opacity:+mid===id?1:0.2,fillOpacity:+mid===id?1:0.15});
+  });
+  const mk=markers[id];
+  if(mk)map.flyTo(mk.getLatLng(),16,{duration:0.8});
+}
+
+buildTabs();
+window.addEventListener('load',()=>{
+  initMap();
+  setView('all');
+});
+</script>
