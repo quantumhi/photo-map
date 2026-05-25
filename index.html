@@ -929,14 +929,31 @@ const CAMPUSES = [
 ];
 
 // (globals declared above)
+let map;
+let markers = {};
+let memories = [];
+let activeView = 'all';
+let activeId = null;
+let currentUser = null;
+let authMode = 'signin';
+let selectedFile = null;
+let showMineOnly = false;
+let commentsByMemory = {};
+let mobileSidebarOpen = false;
 
 function campusFor(name){ return CAMPUSES.find(c => c.name === name); }
 
 function initMap(){
   map = L.map('map', {zoomControl: true}).setView([39.5, -90], 4);
+
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png', {
-    attribution: '© OpenStreetMap © CARTO', maxZoom: 19
+    attribution: '© OpenStreetMap © CARTO',
+    maxZoom: 19
   }).addTo(map);
+
+  setTimeout(() => {
+    map.invalidateSize();
+  }, 100);
 }
 
 function buildTabs(){
@@ -1231,6 +1248,10 @@ function deleteComment(memoryId, commentId){
 function toggleMobileSidebar(){
   mobileSidebarOpen = !mobileSidebarOpen;
   document.getElementById('sidebar').classList.toggle('open', mobileSidebarOpen);
+
+  setTimeout(() => {
+    if(map) map.invalidateSize();
+  }, 320);
 }
 
 // Init
