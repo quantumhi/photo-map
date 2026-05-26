@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>Pinned — Map Memories</title>
+<title>Pinned — Smart Memory Map with Photo Metadata</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -124,9 +124,9 @@ body {
 .comment-input { width: 100%; padding: 7px 10px; background: var(--bg); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); color: var(--text); }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(6px); z-index: 2000; display: flex; align-items: center; justify-content: center; }
 .overlay.hidden { display: none; }
-.modal, .upload-modal { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 20px; padding: 32px; width: 460px; max-width: 94vw; max-height: 90vh; overflow-y: auto; animation: fadeIn 0.2s; position: relative; }
+.modal, .upload-modal { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 20px; padding: 32px; width: 500px; max-width: 94vw; max-height: 90vh; overflow-y: auto; animation: fadeIn 0.2s; position: relative; }
 .upload-modal h2 { font-family: 'Instrument Serif', serif; font-size: 24px; margin-bottom: 20px; }
-.upload-modal label { font-size: 11.5px; font-weight: 500; color: var(--text-3); text-transform: uppercase; display: block; margin-bottom: 5px; }
+.upload-modal label { font-size: 11.5px; font-weight: 500; color: var(--text-3); text-transform: uppercase; display: block; margin-bottom: 5px; margin-top: 10px; }
 .upload-modal input, .upload-modal select, .upload-modal textarea {
   width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm); font-size: 13.5px; color: var(--text); margin-bottom: 16px;
@@ -135,7 +135,9 @@ body {
 .location-search-group input { flex: 1; margin-bottom: 0; }
 .location-search-group .btn { padding: 10px; margin: 0; }
 .location-preview { background: var(--surface2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; margin-bottom: 16px; display: flex; align-items: center; gap: 6px; color: var(--accent); }
-.file-drop { border: 1.5px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 24px; text-align: center; cursor: pointer; margin-bottom: 16px; }
+.metadata-preview { background: var(--surface2); border-radius: var(--radius-sm); padding: 10px; font-size: 11px; margin-bottom: 16px; border-left: 3px solid var(--accent); }
+.metadata-preview strong { color: var(--accent); }
+.file-drop { border: 1.5px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 24px; text-align: center; cursor: pointer; margin-bottom: 16px; transition: all var(--transition); }
 .file-drop.has-file { border-color: var(--green); background: rgba(109,191,154,0.05); }
 .upload-actions { display: flex; gap: 8px; margin-top: 8px; }
 .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 5000; display: flex; align-items: center; justify-content: center; cursor: pointer; }
@@ -151,32 +153,42 @@ body {
 .leaflet-control-geocoder { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; }
 .leaflet-control-geocoder-form input { background: var(--bg); color: var(--text); }
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
 </head>
 <body>
 
 <div class="overlay hidden" id="auth-overlay"><div class="modal"><button class="modal-close" onclick="closeAuth()">×</button><h2 id="auth-title">Welcome back</h2><p id="auth-sub">Sign in to pin your memories to the map.</p><div class="modal-err" id="auth-err"></div><input type="email" id="auth-email" placeholder="your@email.com"/><input type="password" id="auth-pass" placeholder="Password"/><button class="btn primary" onclick="submitAuth()">Continue →</button><div class="modal-msg" id="auth-msg"></div><div class="switch" id="auth-switch" onclick="toggleAuthMode()">No account? <span>Sign up</span></div></div></div>
 
 <div class="overlay hidden" id="upload-overlay"><div class="upload-modal"><button class="modal-close" onclick="closeUpload()">×</button><h2>Pin a memory</h2>
-  <label>Campus / general area (optional fallback)</label>
+  <label>Campus (fallback location)</label>
   <select id="up-campus"></select>
-  <label>📍 Exact location (search below)</label>
+  
+  <label>📸 Photo (optional - extracts GPS & date)</label>
+  <div class="file-drop" id="file-drop" onclick="document.getElementById('up-file').click()">
+    <span class="file-drop-icon">🖼️</span> Tap to choose a photo
+  </div>
+  <input type="file" id="up-file" accept="image/jpeg,image/heic,image/png,image/jpg" style="display:none" onchange="handleFileWithMetadata(this)"/>
+  
+  <div id="metadata-preview" class="metadata-preview hidden"></div>
+  
+  <label>📍 Exact location (search or from photo)</label>
   <div class="location-search-group">
-    <input type="text" id="location-search-input" placeholder="Search for a place, address, or lat,lng" />
-    <button class="btn" id="search-location-btn" onclick="searchLocation()">🔍</button>
+    <input type="text" id="location-search-input" placeholder="Search for a place, address" />
+    <button class="btn" onclick="searchLocation()">🔍</button>
+    <button class="btn" onclick="useMyLocation()" title="Use current location">📍</button>
   </div>
   <div id="location-preview" class="location-preview hidden">
     <span>📍</span> <span id="selected-location-label">No location selected</span>
   </div>
+  
   <label>Place name (display title)</label>
-  <input type="text" id="up-place" placeholder="e.g., The Lawn, Ben & Jerry's, Hidden bench" />
+  <input type="text" id="up-place" placeholder="e.g., The Lawn, Ben & Jerry's" />
+  
   <label>Caption</label>
   <textarea id="up-caption" placeholder="What's the vibe?"></textarea>
+  
   <label>Tag friends (emails)</label>
   <input type="text" id="up-tags" placeholder="friend@example.com"/>
-  <label>Photo (optional)</label>
-  <div class="file-drop" id="file-drop" onclick="document.getElementById('up-file').click()"><span class="file-drop-icon">🖼️</span> Tap to choose a photo</div>
-  <input type="file" id="up-file" accept="image/*" style="display:none" onchange="handleFile(this)"/>
+  
   <div class="modal-err" id="up-err"></div>
   <div class="upload-actions"><button class="btn" onclick="closeUpload()">Cancel</button><button class="btn primary" onclick="submitMemory()">Post memory</button></div>
 </div></div>
@@ -190,6 +202,8 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.min.js"></script>
+
 <script>
 const SUPABASE_URL = 'https://dsxwytqvoshceqwljibr.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRzeHd5dHF2b3NoY2Vxd2xqaWJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1OTk3MTEsImV4cCI6MjA5NTE3NTcxMX0.ik0qV5ygBS4HT-IW06V9rMrxaC6GGb_kS9uos5XBfT0';
@@ -206,6 +220,7 @@ const CAMPUSES = [
 let map, markers = {}, memories = [], activeView = 'all', activeId = null, currentUser = null, authMode = 'signin';
 let selectedFile = null, showMineOnly = false, commentsByMemory = {}, mobileSidebarOpen = false;
 let pendingCustomLocation = null; // { lat, lng, displayName }
+let extractedMetadata = null; // { gpsLat, gpsLng, dateTime, make, model }
 
 function campusFor(name){ return CAMPUSES.find(c => c.name === name); }
 
@@ -214,7 +229,6 @@ function initMap(){
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
   setTimeout(() => map.invalidateSize(), 100);
   
-  // Optional: add geocoder control to map for convenience, but we also have custom search
   L.Control.geocoder({ defaultMarkGeocode: false }).addTo(map).on('markgeocode', function(e) {
     const center = e.geocode.center;
     const name = e.geocode.name;
@@ -235,13 +249,15 @@ async function loadMemories(){
 function clearMarkers(){ Object.values(markers).forEach(m => m.remove()); markers = {}; }
 
 function addMarker(m){
-  // if memory has custom coordinates, use them; otherwise fallback to campus jitter
-  let lat = m.custom_lat, lng = m.custom_lng;
-  if(lat && lng) {
-    // exact custom location
+  // Priority: custom coordinates > campus coordinates
+  let lat, lng;
+  if(m.custom_lat && m.custom_lng) {
+    lat = m.custom_lat;
+    lng = m.custom_lng;
   } else {
     const c = campusFor(m.campus);
     if(!c) return;
+    // Add slight jitter to avoid overlapping pins on campus
     lat = c.lat + (Math.random() - 0.5) * 0.008;
     lng = c.lng + (Math.random() - 0.5) * 0.008;
   }
@@ -250,7 +266,7 @@ function addMarker(m){
     radius: 9, fillColor: c.color, color: 'rgba(15,15,17,0.8)', weight: 2.5, fillOpacity: 0.9
   }).addTo(map);
   marker.on('click', () => selectMemory(m.id));
-  marker.bindTooltip(m.place + ' · ' + m.campus, {direction: 'top', offset: [0, -10]});
+  marker.bindTooltip(`${m.place} · ${m.campus}${m.custom_lat ? ' 📍' : ''}`, {direction: 'top', offset: [0, -10]});
   markers[m.id] = marker;
 }
 
@@ -282,9 +298,10 @@ function renderList(list){
     const imgHtml = m.photo_url ? `<img class="mem-img" src="${m.photo_url}" onclick="event.stopPropagation();openLightbox('${m.photo_url}')"/>` : `<div class="mem-emoji-bg">📍</div>`;
     const date = new Date(m.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
     const isOwner = currentUser && currentUser.id === m.user_id;
+    const locationIcon = m.custom_lat ? ' 📍' : ' 🏫';
     return `<div class="mem-card${activeId === m.id ? ' active' : ''}" id="card${m.id}" onclick="selectMemory('${m.id}')">
       ${imgHtml}
-      <div class="mem-row"><span class="mem-place">${escapeHtml(m.place)}</span><span class="mem-badge" style="background:${c.bg};color:${c.tc}">${m.campus}</span></div>
+      <div class="mem-row"><span class="mem-place">${escapeHtml(m.place)}${locationIcon}</span><span class="mem-badge" style="background:${c.bg};color:${c.tc}">${m.campus}</span></div>
       <div class="mem-who">${m.user_email || 'Anonymous'}</div>
       <div class="mem-caption">${escapeHtml(m.caption)}</div>
       ${m.tagged_emails && m.tagged_emails.length ? `<div class="tag-list">🏷 ${m.tagged_emails.join(', ')}</div>` : ''}
@@ -345,11 +362,94 @@ function updateAuthUI(user){
   if(user) document.getElementById('user-email-label').textContent = user.email;
 }
 
-// LOCATION SEARCH + CUSTOM COORDINATES
+// EXIF METADATA EXTRACTION
+function handleFileWithMetadata(input){
+  if(!input.files || !input.files[0]) return;
+  selectedFile = input.files[0];
+  const fd = document.getElementById('file-drop');
+  fd.innerHTML = `<span class="file-drop-icon">✅</span>${selectedFile.name}`;
+  fd.classList.add('has-file');
+  
+  // Extract EXIF metadata
+  EXIF.getData(selectedFile, function() {
+    const gpsLat = EXIF.getTag(this, 'GPSLatitude');
+    const gpsLon = EXIF.getTag(this, 'GPSLongitude');
+    const dateTime = EXIF.getTag(this, 'DateTimeOriginal') || EXIF.getTag(this, 'DateTime');
+    const make = EXIF.getTag(this, 'Make');
+    const model = EXIF.getTag(this, 'Model');
+    
+    let metadataHtml = '<strong>📸 Photo Info:</strong><br/>';
+    
+    if(gpsLat && gpsLon) {
+      // Convert GPS coordinates from DMS to decimal
+      const lat = convertDMSToDD(gpsLat, EXIF.getTag(this, 'GPSLatitudeRef'));
+      const lng = convertDMSToDD(gpsLon, EXIF.getTag(this, 'GPSLongitudeRef'));
+      extractedMetadata = { gpsLat: lat, gpsLng: lng, dateTime, make, model };
+      
+      metadataHtml += `📍 GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}<br/>`;
+      metadataHtml += `<button class="btn" style="margin-top:5px;padding:4px 8px;font-size:11px;" onclick="usePhotoLocation(${lat}, ${lng})">📍 Use photo location</button><br/>`;
+      
+      // Try to reverse geocode the location
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
+        .then(res => res.json())
+        .then(data => {
+          if(data && data.display_name) {
+            document.getElementById('metadata-preview').innerHTML += `<span style="font-size:10px;color:var(--text-2);">📍 ${data.display_name.substring(0, 100)}</span>`;
+          }
+        }).catch(() => {});
+    } else {
+      metadataHtml += `📍 No GPS data found in this image<br/>`;
+      extractedMetadata = null;
+    }
+    
+    if(dateTime) {
+      metadataHtml += `📅 Date: ${dateTime}<br/>`;
+      // Suggest caption from date
+      const dateObj = new Date(dateTime);
+      if(!isNaN(dateObj.getTime()) && !document.getElementById('up-caption').value) {
+        document.getElementById('up-caption').placeholder = `e.g., Taken on ${dateObj.toLocaleDateString()}`;
+      }
+    }
+    if(make || model) metadataHtml += `📱 ${make || ''} ${model || ''}`.trim();
+    
+    document.getElementById('metadata-preview').innerHTML = metadataHtml;
+    document.getElementById('metadata-preview').classList.remove('hidden');
+  });
+}
+
+function convertDMSToDD(dms, ref) {
+  const degrees = dms[0];
+  const minutes = dms[1];
+  const seconds = dms[2];
+  let dd = degrees + (minutes / 60) + (seconds / 3600);
+  if (ref === 'S' || ref === 'W') dd = -dd;
+  return dd;
+}
+
+function usePhotoLocation(lat, lng){
+  setSelectedLocation(lat, lng, `Photo location (${lat.toFixed(5)}, ${lng.toFixed(5)})`);
+  map.flyTo([lat, lng], 15, {duration: 1});
+}
+
+function useMyLocation(){
+  if(!navigator.geolocation) {
+    document.getElementById('up-err').innerText = 'Geolocation not supported';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(position => {
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+    setSelectedLocation(lat, lng, 'My current location');
+    map.flyTo([lat, lng], 15, {duration: 1});
+  }, () => {
+    document.getElementById('up-err').innerText = 'Could not get your location';
+  });
+}
+
+// LOCATION SEARCH
 function searchLocation(){
   const query = document.getElementById('location-search-input').value.trim();
   if(!query){ document.getElementById('up-err').innerText = 'Enter a place name or address'; return; }
-  // Use Nominatim (openstreetmap)
   fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&addressdetails=0`)
     .then(res => res.json())
     .then(data => {
@@ -359,46 +459,49 @@ function searchLocation(){
       const lng = parseFloat(place.lon);
       const display = place.display_name.split(',')[0] || query;
       setSelectedLocation(lat, lng, display);
+      map.flyTo([lat, lng], 15, {duration: 0.8});
     })
     .catch(err => { document.getElementById('up-err').innerText = 'Location not found'; });
 }
+
 function setSelectedLocation(lat, lng, displayName){
   pendingCustomLocation = { lat, lng, displayName };
   const previewDiv = document.getElementById('location-preview');
   const labelSpan = document.getElementById('selected-location-label');
   labelSpan.innerText = `📍 ${displayName} (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
   previewDiv.classList.remove('hidden');
-  // Optionally fly map preview in small embedded? Not needed but neat
-  if(map) map.flyTo([lat, lng], 14, {duration: 0.6});
+  if(!document.getElementById('up-place').value) {
+    document.getElementById('up-place').value = displayName;
+  }
   document.getElementById('up-err').innerText = '';
 }
-function clearSelectedLocation(){ pendingCustomLocation = null; document.getElementById('location-preview').classList.add('hidden'); }
 
 // UPLOAD
 function openUpload(){
   document.getElementById('upload-overlay').classList.remove('hidden');
   document.getElementById('up-err').textContent = '';
   selectedFile = null;
+  extractedMetadata = null;
   pendingCustomLocation = null;
   document.getElementById('location-preview').classList.add('hidden');
+  document.getElementById('metadata-preview').classList.add('hidden');
   document.getElementById('location-search-input').value = '';
   const fd = document.getElementById('file-drop');
-  fd.innerHTML = '<span class="file-drop-icon">🖼️</span>Tap to choose a photo';
+  fd.innerHTML = '<span class="file-drop-icon">🖼️</span>Tap to choose a photo (iPhone photos include GPS!)';
   fd.classList.remove('has-file');
   document.getElementById('up-place').value = '';
   document.getElementById('up-caption').value = '';
   document.getElementById('up-tags').value = '';
 }
 function closeUpload(){ document.getElementById('upload-overlay').classList.add('hidden'); }
-function handleFile(input){
-  if(input.files && input.files[0]){ selectedFile = input.files[0]; const fd = document.getElementById('file-drop'); fd.innerHTML = `<span class="file-drop-icon">✅</span>${selectedFile.name}`; fd.classList.add('has-file'); }
-}
+
 async function submitMemory(){
   const campus = document.getElementById('up-campus').value;
   let place = document.getElementById('up-place').value.trim();
   const caption = document.getElementById('up-caption').value.trim();
   const tags = document.getElementById('up-tags').value.split(',').map(t=>t.trim()).filter(Boolean);
   const errEl = document.getElementById('up-err');
+  
   if(!place && pendingCustomLocation?.displayName) place = pendingCustomLocation.displayName;
   if(!place){ errEl.textContent = 'Please provide a place name or select a location.'; return; }
   if(!caption){ errEl.textContent = 'Please add a caption.'; return; }
@@ -416,14 +519,28 @@ async function submitMemory(){
   
   const memoryPayload = {
     user_id: currentUser.id, user_email: currentUser.email, campus, place, caption, photo_url,
-    tagged_emails: tags, emoji: '📍', custom_lat: null, custom_lng: null
+    tagged_emails: tags, emoji: '📍'
   };
+  
+  // Use custom location if selected, otherwise use extracted GPS from photo, otherwise null
   if(pendingCustomLocation){
     memoryPayload.custom_lat = pendingCustomLocation.lat;
     memoryPayload.custom_lng = pendingCustomLocation.lng;
+  } else if(extractedMetadata && extractedMetadata.gpsLat && extractedMetadata.gpsLng){
+    memoryPayload.custom_lat = extractedMetadata.gpsLat;
+    memoryPayload.custom_lng = extractedMetadata.gpsLng;
   }
+  
   const { error } = await sb.from('memories').insert(memoryPayload);
-  if(error){ errEl.textContent = 'Failed: ' + error.message; return; }
+  if(error){ 
+    if(error.message.includes('custom_lat')) {
+      errEl.textContent = 'Database error: Please run SQL to add custom_lat/custom_lng columns (see console for instructions)';
+      console.error('Need to add columns: ALTER TABLE memories ADD COLUMN custom_lat DOUBLE PRECISION, ADD COLUMN custom_lng DOUBLE PRECISION;');
+    } else {
+      errEl.textContent = 'Failed: ' + error.message;
+    }
+    return; 
+  }
   closeUpload();
   await loadMemories();
   setView(activeView);
