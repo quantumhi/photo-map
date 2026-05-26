@@ -472,6 +472,8 @@ function handleFileWithMetadata(input){
       const lat = convertDMSToDD(gpsLat, EXIF.getTag(this, 'GPSLatitudeRef'));
       const lng = convertDMSToDD(gpsLon, EXIF.getTag(this, 'GPSLongitudeRef'));
       extractedMetadata = { gpsLat: lat, gpsLng: lng, dateTime, make, model };
+      window.photoGpsLat = lat;  
+      window.photoGpsLng = lng;  
       
       metadataHtml += `📍 GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}<br/>`;
       metadataHtml += `<button class="btn" style="margin-top:5px;padding:4px 8px;font-size:11px;" onclick="usePhotoLocation(${lat}, ${lng})">📍 Use photo location</button><br/>`;
