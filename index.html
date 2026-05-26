@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -112,7 +113,8 @@ body {
 .mem-card { padding: 14px 18px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background var(--transition); position: relative; }
 .mem-card.active { background: rgba(232,201,122,0.06); }
 .mem-card.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
-.mem-img { width: 100%; height: 120px; border-radius: 10px; object-fit: cover; margin-bottom: 10px; }
+.mem-img { width: 100%; height: 120px; border-radius: 10px; object-fit: cover; margin-bottom: 10px; cursor: pointer; transition: transform 0.2s; }
+.mem-img:hover { transform: scale(1.02); }
 .mem-emoji-bg { width: 100%; height: 72px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 28px; background: var(--surface2); margin-bottom: 10px; }
 .mem-row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
 .mem-place { font-size: 13.5px; font-weight: 600; }
@@ -140,8 +142,57 @@ body {
 .file-drop { border: 1.5px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 24px; text-align: center; cursor: pointer; margin-bottom: 16px; transition: all var(--transition); }
 .file-drop.has-file { border-color: var(--green); background: rgba(109,191,154,0.05); }
 .upload-actions { display: flex; gap: 8px; margin-top: 8px; }
-.lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 5000; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-.lightbox.hidden { display: none; }
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.95);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.lightbox.active {
+  opacity: 1;
+  visibility: visible;
+}
+.lightbox-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  cursor: default;
+}
+.lightbox img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+}
+.lightbox-close {
+  position: absolute;
+  top: -50px;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 28px;
+  color: white;
+  transition: all 0.2s;
+  z-index: 10001;
+}
+.lightbox-close:hover {
+  background: rgba(255,255,255,0.2);
+  transform: scale(1.1);
+}
 .sidebar-toggle-mobile { display: none; position: fixed; bottom: 20px; right: 20px; z-index: 800; background: var(--accent); border-radius: 50%; width: 50px; height: 50px; align-items: center; justify-content: center; cursor: pointer; }
 @media (max-width: 768px) {
   .sidebar { position: fixed; bottom: 0; left: 0; right: 0; width: 100%; height: 55vh; border-top: 1px solid var(--border-strong); transform: translateY(100%); z-index: 700; border-radius: 20px 20px 0 0; }
@@ -149,9 +200,11 @@ body {
   .sidebar-toggle-mobile { display: flex; }
   .tabs-scroll { display: none; }
   .mine-toggle { display: none; }
+  .lightbox-close { top: 20px; right: 20px; background: rgba(0,0,0,0.5); }
 }
 .leaflet-control-geocoder { background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; }
 .leaflet-control-geocoder-form input { background: var(--bg); color: var(--text); }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 </style>
 </head>
 <body>
@@ -197,7 +250,14 @@ body {
 
 <div class="body"><div id="map"></div><div class="sidebar" id="sidebar"><div class="sidebar-handle"></div><div class="sidebar-header"><div class="sidebar-title" id="s-title">All memories</div><div class="sidebar-sub" id="s-sub">Loading…</div></div><div class="mem-list" id="mem-list"></div></div></div>
 <button class="sidebar-toggle-mobile" id="sidebar-toggle-btn" onclick="toggleMobileSidebar()">☰</button>
-<div class="lightbox hidden" id="lightbox" onclick="closeLightbox(event)"><div class="lightbox-close" onclick="document.getElementById('lightbox').classList.add('hidden')">×</div><img id="lightbox-img" src="" alt="memory"/></div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="lightbox" onclick="closeLightbox()">
+  <div class="lightbox-content">
+    <div class="lightbox-close" onclick="closeLightbox()">×</div>
+    <img id="lightbox-img" src="" alt="Memory photo"/>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
@@ -219,8 +279,8 @@ const CAMPUSES = [
 ];
 let map, markers = {}, memories = [], activeView = 'all', activeId = null, currentUser = null, authMode = 'signin';
 let selectedFile = null, showMineOnly = false, commentsByMemory = {}, mobileSidebarOpen = false;
-let pendingCustomLocation = null; // { lat, lng, displayName }
-let extractedMetadata = null; // { gpsLat, gpsLng, dateTime, make, model }
+let pendingCustomLocation = null;
+let extractedMetadata = null;
 
 function campusFor(name){ return CAMPUSES.find(c => c.name === name); }
 
@@ -249,7 +309,6 @@ async function loadMemories(){
 function clearMarkers(){ Object.values(markers).forEach(m => m.remove()); markers = {}; }
 
 function addMarker(m){
-  // Priority: custom coordinates > campus coordinates
   let lat, lng;
   if(m.custom_lat && m.custom_lng) {
     lat = m.custom_lat;
@@ -257,7 +316,6 @@ function addMarker(m){
   } else {
     const c = campusFor(m.campus);
     if(!c) return;
-    // Add slight jitter to avoid overlapping pins on campus
     lat = c.lat + (Math.random() - 0.5) * 0.008;
     lng = c.lng + (Math.random() - 0.5) * 0.008;
   }
@@ -295,7 +353,7 @@ function renderList(list){
   if(!list.length){ el.innerHTML = `<div class="empty"><span class="empty-icon">🗺️</span>No memories here yet.</div>`; return; }
   el.innerHTML = list.map(m => {
     const c = campusFor(m.campus) || {bg:'rgba(255,255,255,0.05)', tc:'#9d9a96'};
-    const imgHtml = m.photo_url ? `<img class="mem-img" src="${m.photo_url}" onclick="event.stopPropagation();openLightbox('${m.photo_url}')"/>` : `<div class="mem-emoji-bg">📍</div>`;
+    const imgHtml = m.photo_url ? `<img class="mem-img" src="${m.photo_url}" onclick="event.stopPropagation();openLightbox('${m.photo_url}')" loading="lazy"/>` : `<div class="mem-emoji-bg">📍</div>`;
     const date = new Date(m.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
     const isOwner = currentUser && currentUser.id === m.user_id;
     const locationIcon = m.custom_lat ? ' 📍' : ' 🏫';
@@ -327,6 +385,37 @@ function selectMemory(id){
   if(mk) map.flyTo(mk.getLatLng(), 16, {duration: 0.8});
   if(window.innerWidth <= 768){ document.getElementById('sidebar').classList.add('open'); mobileSidebarOpen = true; }
 }
+
+// Lightbox functions - FIXED
+function openLightbox(imageUrl) {
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightbox-img');
+  lightboxImg.src = imageUrl;
+  lightbox.classList.add('active');
+  // Prevent body scroll when lightbox is open
+  document.body.style.overflow = 'hidden';
+}
+
+function closeLightbox() {
+  const lightbox = document.getElementById('lightbox');
+  lightbox.classList.remove('active');
+  // Reset image src to avoid flickering
+  setTimeout(() => {
+    document.getElementById('lightbox-img').src = '';
+  }, 300);
+  // Restore body scroll
+  document.body.style.overflow = '';
+}
+
+// Close lightbox with Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const lightbox = document.getElementById('lightbox');
+    if (lightbox.classList.contains('active')) {
+      closeLightbox();
+    }
+  }
+});
 
 // AUTH
 function openAuth(){ document.getElementById('auth-overlay').classList.remove('hidden'); }
@@ -370,7 +459,6 @@ function handleFileWithMetadata(input){
   fd.innerHTML = `<span class="file-drop-icon">✅</span>${selectedFile.name}`;
   fd.classList.add('has-file');
   
-  // Extract EXIF metadata
   EXIF.getData(selectedFile, function() {
     const gpsLat = EXIF.getTag(this, 'GPSLatitude');
     const gpsLon = EXIF.getTag(this, 'GPSLongitude');
@@ -381,7 +469,6 @@ function handleFileWithMetadata(input){
     let metadataHtml = '<strong>📸 Photo Info:</strong><br/>';
     
     if(gpsLat && gpsLon) {
-      // Convert GPS coordinates from DMS to decimal
       const lat = convertDMSToDD(gpsLat, EXIF.getTag(this, 'GPSLatitudeRef'));
       const lng = convertDMSToDD(gpsLon, EXIF.getTag(this, 'GPSLongitudeRef'));
       extractedMetadata = { gpsLat: lat, gpsLng: lng, dateTime, make, model };
@@ -389,7 +476,6 @@ function handleFileWithMetadata(input){
       metadataHtml += `📍 GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)}<br/>`;
       metadataHtml += `<button class="btn" style="margin-top:5px;padding:4px 8px;font-size:11px;" onclick="usePhotoLocation(${lat}, ${lng})">📍 Use photo location</button><br/>`;
       
-      // Try to reverse geocode the location
       fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`)
         .then(res => res.json())
         .then(data => {
@@ -404,7 +490,6 @@ function handleFileWithMetadata(input){
     
     if(dateTime) {
       metadataHtml += `📅 Date: ${dateTime}<br/>`;
-      // Suggest caption from date
       const dateObj = new Date(dateTime);
       if(!isNaN(dateObj.getTime()) && !document.getElementById('up-caption').value) {
         document.getElementById('up-caption').placeholder = `e.g., Taken on ${dateObj.toLocaleDateString()}`;
@@ -446,7 +531,6 @@ function useMyLocation(){
   });
 }
 
-// LOCATION SEARCH
 function searchLocation(){
   const query = document.getElementById('location-search-input').value.trim();
   if(!query){ document.getElementById('up-err').innerText = 'Enter a place name or address'; return; }
@@ -476,7 +560,6 @@ function setSelectedLocation(lat, lng, displayName){
   document.getElementById('up-err').innerText = '';
 }
 
-// UPLOAD
 function openUpload(){
   document.getElementById('upload-overlay').classList.remove('hidden');
   document.getElementById('up-err').textContent = '';
@@ -522,7 +605,6 @@ async function submitMemory(){
     tagged_emails: tags, emoji: '📍'
   };
   
-  // Use custom location if selected, otherwise use extracted GPS from photo, otherwise null
   if(pendingCustomLocation){
     memoryPayload.custom_lat = pendingCustomLocation.lat;
     memoryPayload.custom_lng = pendingCustomLocation.lng;
@@ -534,7 +616,7 @@ async function submitMemory(){
   const { error } = await sb.from('memories').insert(memoryPayload);
   if(error){ 
     if(error.message.includes('custom_lat')) {
-      errEl.textContent = 'Database error: Please run SQL to add custom_lat/custom_lng columns (see console for instructions)';
+      errEl.textContent = 'Database error: Please run SQL to add custom_lat/custom_lng columns';
       console.error('Need to add columns: ALTER TABLE memories ADD COLUMN custom_lat DOUBLE PRECISION, ADD COLUMN custom_lng DOUBLE PRECISION;');
     } else {
       errEl.textContent = 'Failed: ' + error.message;
@@ -563,8 +645,6 @@ function getFilteredMemories(){
   if(showMineOnly && currentUser) filtered = filtered.filter(m => m.user_id === currentUser.id);
   return filtered;
 }
-function openLightbox(url){ document.getElementById('lightbox').classList.remove('hidden'); document.getElementById('lightbox-img').src = url; }
-function closeLightbox(e){ if(e.target.id === 'lightbox-img') return; document.getElementById('lightbox').classList.add('hidden'); }
 function toggleMobileSidebar(){ mobileSidebarOpen = !mobileSidebarOpen; document.getElementById('sidebar').classList.toggle('open', mobileSidebarOpen); setTimeout(()=>map?.invalidateSize(), 320); }
 function buildTabs(){
   const wrap = document.getElementById('tabs');
