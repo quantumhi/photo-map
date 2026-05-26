@@ -471,7 +471,7 @@ function handleFileWithMetadata(input){
     if(gpsLat && gpsLon) {
       const lat = convertDMSToDD(gpsLat, EXIF.getTag(this, 'GPSLatitudeRef'));
       const lng = convertDMSToDD(gpsLon, EXIF.getTag(this, 'GPSLongitudeRef'));
-      extractedMetadata = { gpsLat: lat, gpsLng: lng, dateTime, make, model };
+      extractedMetadata = { lat, lng, dateTime, make, model };
       window.photoGpsLat = lat;  
       window.photoGpsLng = lng;  
       
